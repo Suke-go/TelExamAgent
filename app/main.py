@@ -261,16 +261,22 @@ async def browser_websocket_endpoint(websocket: WebSocket):
                     
                     # 1. Send to STT (convert PCM16 -> u-law)
                     ulaw_data = pcm16_to_ulaw(resampled_pcm)
-                    await stt_service.send_audio(ulaw_data)
+                    stt_service.send_audio(ulaw_data)
                     
                     # 2. VAD Check (needs Float32 normalized to [-1, 1])
-                    float_data = resampled_audio.astype(np.float32) / 32768.0
-                    
-                    vad_result = vad_service.process_audio_chunk(float_data)
-                    if vad_result['speech_start']:
-                        logger.info("VAD (Browser): Speech start detected.")
-                        if is_ai_speaking:
-                            await handle_interruption()
+                    # Silero VAD requires at least ~4000 samples (0.5s at 8kHz) to work properly
+                    # Skip VAD for very short chunks to avoid "Input audio chunk is too short" error
+                    if len(resampled_audio) >= 4000:
+                        float_data = resampled_audio.astype(np.float32) / 32768.0
+                        try:
+                            vad_result = vad_service.process_audio_chunk(float_data)
+                            if vad_result['speech_start']:
+                                logger.info("VAD (Browser): Speech start detected.")
+                                if is_ai_speaking:
+                                    await handle_interruption()
+                        except Exception as vad_error:
+                            # Silently skip VAD errors for short chunks
+                            pass
 
     except WebSocketDisconnect:
         logger.info("Browser disconnected")
