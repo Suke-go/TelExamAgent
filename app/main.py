@@ -209,20 +209,32 @@ async def browser_websocket_endpoint(websocket: WebSocket):
         logger.info("Sending initial greeting: こんにちは。定期検診システムです。お話しください。")
         
         async def send_greeting():
-            greeting_text = "こんにちは。定期検診システムです。お話しください。"
-            # Create a simple async generator for the greeting text
-            async def greeting_generator():
-                yield greeting_text
-            
-            # Stream TTS audio
-            audio_stream = tts_service.stream_text(greeting_generator())
-            async for audio_chunk in audio_stream:
-                audio_b64 = base64.b64encode(audio_chunk).decode('utf-8')
-                await websocket.send_json({
-                    "event": "media",
-                    "media": {"payload": audio_b64}
-                })
-            logger.info("Initial greeting sent")
+            try:
+                greeting_text = "こんにちは。定期検診システムです。お話しください。"
+                logger.info(f"Generating TTS for: {greeting_text}")
+                # Create a simple async generator for the greeting text
+                async def greeting_generator():
+                    yield greeting_text
+                
+                # Stream TTS audio
+                audio_stream = tts_service.stream_text(greeting_generator())
+                chunk_count = 0
+                total_bytes = 0
+                async for audio_chunk in audio_stream:
+                    if audio_chunk:
+                        audio_b64 = base64.b64encode(audio_chunk).decode('utf-8')
+                        total_bytes += len(audio_chunk)
+                        chunk_count += 1
+                        logger.info(f"Sending audio chunk {chunk_count} ({len(audio_chunk)} bytes, base64: {len(audio_b64)} chars)")
+                        await websocket.send_json({
+                            "event": "media",
+                            "media": {"payload": audio_b64}
+                        })
+                    else:
+                        logger.warning("Received empty audio chunk from TTS")
+                logger.info(f"Initial greeting sent: {chunk_count} chunks, {total_bytes} total bytes")
+            except Exception as e:
+                logger.error(f"Error in send_greeting: {e}", exc_info=True)
         
         asyncio.create_task(send_greeting())
     except Exception as e:

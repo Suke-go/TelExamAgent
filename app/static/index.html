@@ -153,15 +153,27 @@
                 };
 
                 websocket.onmessage = async (event) => {
-                    const data = JSON.parse(event.data);
-                    if (data.event === 'media') {
-                        playAudio(data.media.payload);
-                    } else if (data.event === 'clear') {
-                        log("Interrupt signal received");
-                        // Ideally we would clear the audio buffer here, but Web Audio API doesn't support clearing queued buffers easily without stopping.
-                        // For this prototype, we might just ignore it or restart context?
-                        // A simple way to simulate "stop" is to suspend/resume context, or just let it play out (latency might be issue).
-                        // Advanced: Use an AudioWorklet or a ring buffer that we can clear.
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`Received WebSocket message: event=${data.event}`);
+                        if (data.event === 'media') {
+                            if (data.media && data.media.payload) {
+                                log(`Media payload length: ${data.media.payload.length} chars (base64)`);
+                                playAudio(data.media.payload);
+                            } else {
+                                log("ERROR: media event but no payload!");
+                            }
+                        } else if (data.event === 'clear') {
+                            log("Interrupt signal received");
+                            // Ideally we would clear the audio buffer here, but Web Audio API doesn't support clearing queued buffers easily without stopping.
+                            // For this prototype, we might just ignore it or restart context?
+                            // A simple way to simulate "stop" is to suspend/resume context, or just let it play out (latency might be issue).
+                            // Advanced: Use an AudioWorklet or a ring buffer that we can clear.
+                        } else {
+                            log(`Unknown event type: ${data.event}`);
+                        }
+                    } catch (e) {
+                        log(`Error processing WebSocket message: ${e.message}`);
                     }
                 };
 
