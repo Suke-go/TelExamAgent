@@ -273,7 +273,9 @@ async def browser_websocket_endpoint(websocket: WebSocket):
                     
                     # 1. Send to STT (convert PCM16 -> u-law)
                     ulaw_data = pcm16_to_ulaw(resampled_pcm)
-                    stt_service.send_audio(ulaw_data)
+                    # Note: send_audio is async but Deepgram's send() is synchronous
+                    # We call it without await since it's fire-and-forget
+                    asyncio.create_task(stt_service.send_audio(ulaw_data))
                     
                     # 2. VAD Check (needs Float32 normalized to [-1, 1])
                     # Silero VAD requires at least ~4000 samples (0.5s at 8kHz) to work properly

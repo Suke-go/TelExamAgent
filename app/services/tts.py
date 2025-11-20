@@ -69,26 +69,33 @@ class TTSService:
 
         # Receive audio
         try:
+            message_count = 0
             while True:
                 if not self.websocket:
                     break
                 try:
                     message = await self.websocket.recv()
+                    message_count += 1
                     data = json.loads(message)
+                    print(f"ElevenLabs message #{message_count}: {json.dumps(data, indent=2)}")
                     
                     if data.get("audio"):
                         # Decode base64 audio
                         audio_chunk = base64.b64decode(data["audio"])
+                        print(f"Decoded audio chunk: {len(audio_chunk)} bytes")
                         if audio_chunk:
                             yield audio_chunk
+                    else:
+                        print(f"No 'audio' field in message #{message_count}")
                             
                     if data.get("isFinal"):
+                        print(f"Received isFinal=True, ending stream")
                         break
                 except websockets.exceptions.ConnectionClosed:
                     print("ElevenLabs connection closed")
                     break
         except Exception as e:
-            print(f"Error receiving audio from TTS: {e}")
+            print(f"Error receiving audio from TTS: {e}", exc_info=True)
         finally:
              # Make sure sender task is done
              if not sender_task.done():
