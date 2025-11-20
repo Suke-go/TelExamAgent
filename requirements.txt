@@ -9,9 +9,7 @@ deepgram-sdk==3.2.0
 openai>=1.40.0
 scipy
 pydub==0.25.1
-# Install CPU-only version of torch to save space and avoid build errors
-torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
-torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cpu
 jinja2==3.1.3
 markdown==3.5.2
 reportlab==4.0.7
+# torch and torchaudio will be installed via command in nixpacks.toml
