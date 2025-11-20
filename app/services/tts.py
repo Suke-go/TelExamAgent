@@ -58,9 +58,15 @@ class TTSService:
                             "text": text_chunk,
                             "try_trigger_generation": True
                         }))
+                        print(f"Sent text to ElevenLabs: '{text_chunk[:50]}...' (length: {len(text_chunk)})")
+                # Send flush to trigger generation
+                if self.websocket:
+                    await self.websocket.send(json.dumps({"text": "", "flush": True}))
+                    print("Sent flush message to ElevenLabs")
                 # Send EOS
                 if self.websocket:
-                    await self.websocket.send(json.dumps({"text": ""})) 
+                    await self.websocket.send(json.dumps({"text": ""}))
+                    print("Sent EOS to ElevenLabs") 
             except Exception as e:
                 print(f"Error sending text to TTS: {e}")
 
