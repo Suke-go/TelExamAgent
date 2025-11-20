@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>レポート一覧</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        h1 {
+            color: #1a5490;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .header-actions {
+            text-align: right;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #2c7fb8;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background-color: #1a5490;
+        }
+        .reports-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .reports-table th,
+        .reports-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .reports-table th {
+            background-color: #e8f4f8;
+            font-weight: bold;
+            color: #1a5490;
+        }
+        .reports-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .action-links a {
+            color: #2c7fb8;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        .action-links a:hover {
+            text-decoration: underline;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .summary {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>定期健診レポート一覧</h1>
+        <div class="header-actions">
+            <a href="/" class="btn">ホームに戻る</a>
+        </div>
+        <div id="loading" class="loading">レポート一覧を読み込み中...</div>
+        <div id="content" style="display: none;">
+            <table class="reports-table">
+                <thead>
+                    <tr>
+                        <th>検査日時</th>
+                        <th>サマリー</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="reports-tbody">
+                </tbody>
+            </table>
+            <div id="empty" class="empty" style="display: none;">
+                レポートがまだありません。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadReports() {
+            try {
+                const response = await fetch('/reports');
+                if (!response.ok) {
+                    throw new Error('レポート一覧の取得に失敗しました');
+                }
+                const data = await response.json();
+                const reports = data.reports || [];
+                
+                if (reports.length === 0) {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('empty').style.display = 'block';
+                    return;
+                }
+                
+                const tbody = document.getElementById('reports-tbody');
+                tbody.innerHTML = '';
+                
+                reports.forEach(report => {
+                    const row = document.createElement('tr');
+                    const examDate = report.examination_date ? new Date(report.examination_date).toLocaleString('ja-JP') : '不明';
+                    row.innerHTML = `
+                        <td>${examDate}</td>
+                        <td class="summary" title="${report.summary || ''}">${report.summary || 'サマリーなし'}</td>
+                        <td class="action-links">
+                            <a href="/reports/${report.session_id}/html">詳細表示</a>
+                            <a href="/reports/${report.session_id}/pdf" target="_blank">PDF</a>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                
+            } catch (error) {
+                document.getElementById('loading').textContent = 'エラー: ' + error.message;
+            }
+        }
+        
+        // ページ読み込み時にレポート一覧を取得
+        loadReports();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.so
+
+# Environment variables
+.env
+.env.*
+env.example
+env copy.example
+*.env
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+

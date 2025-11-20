@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定期健診レポート</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        h1 {
+            color: #1a5490;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .info-section {
+            background-color: #e8f4f8;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .info-label {
+            font-weight: bold;
+            width: 150px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            color: #2c7fb8;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #2c7fb8;
+            padding-bottom: 5px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .status-good {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status-alert {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-unknown {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+        .details {
+            line-height: 1.8;
+            margin-top: 10px;
+        }
+        .concerns, .recommendations {
+            background-color: #fffbf0;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin-top: 15px;
+        }
+        .concerns h3, .recommendations h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        .concerns ul, .recommendations ul {
+            margin-left: 20px;
+        }
+        .concerns li, .recommendations li {
+            margin-bottom: 8px;
+        }
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 0 10px;
+            background-color: #2c7fb8;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background-color: #1a5490;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>定期健診レポート</h1>
+        <div id="loading" class="loading">レポートを読み込み中...</div>
+        <div id="content" style="display: none;">
+            <!-- 基本情報 -->
+            <div class="info-section">
+                <div class="info-row">
+                    <div class="info-label">検査日時:</div>
+                    <div id="examination-date"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">セッションID:</div>
+                    <div id="session-id"></div>
+                </div>
+                <div class="info-row" id="duration-row" style="display: none;">
+                    <div class="info-label">通話時間:</div>
+                    <div id="duration"></div>
+                </div>
+            </div>
+
+            <!-- サマリー -->
+            <div class="section">
+                <div class="section-title">サマリー</div>
+                <div id="summary" class="details"></div>
+            </div>
+
+            <!-- 体調の変化 -->
+            <div class="section">
+                <div class="section-title">1. 最近の体調の変化</div>
+                <div id="health-changes"></div>
+            </div>
+
+            <!-- 食事の状況 -->
+            <div class="section">
+                <div class="section-title">2. 食事の状況</div>
+                <div id="diet"></div>
+            </div>
+
+            <!-- 運動の状況 -->
+            <div class="section">
+                <div class="section-title">3. 運動の状況</div>
+                <div id="exercise"></div>
+            </div>
+
+            <!-- 薬の服用状況 -->
+            <div class="section">
+                <div class="section-title">4. 薬の服用状況</div>
+                <div id="medication"></div>
+            </div>
+
+            <!-- 次回の来院予定 -->
+            <div class="section">
+                <div class="section-title">5. 次回の来院予定</div>
+                <div id="next-visit"></div>
+            </div>
+
+            <!-- 懸念事項 -->
+            <div id="concerns-section" class="section" style="display: none;">
+                <div class="section-title">懸念事項</div>
+                <div class="concerns">
+                    <ul id="concerns-list"></ul>
+                </div>
+            </div>
+
+            <!-- 推奨事項 -->
+            <div id="recommendations-section" class="section" style="display: none;">
+                <div class="section-title">推奨事項</div>
+                <div class="recommendations">
+                    <ul id="recommendations-list"></ul>
+                </div>
+            </div>
+
+            <!-- アクション -->
+            <div class="actions">
+                <a href="#" id="pdf-link" class="btn">PDFダウンロード</a>
+                <a href="/" class="btn btn-secondary">ホームに戻る</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // URLからセッションIDを取得
+        const sessionId = window.location.pathname.split('/').pop();
+        
+        // レポートを読み込み
+        async function loadReport() {
+            try {
+                const response = await fetch(`/reports/${sessionId}`);
+                if (!response.ok) {
+                    throw new Error('レポートが見つかりません');
+                }
+                const report = await response.json();
+                
+                // 基本情報
+                const examDate = report.examination_date ? new Date(report.examination_date).toLocaleString('ja-JP') : '不明';
+                document.getElementById('examination-date').textContent = examDate;
+                document.getElementById('session-id').textContent = report.session_id || sessionId;
+                
+                if (report.duration_minutes) {
+                    document.getElementById('duration-row').style.display = 'flex';
+                    document.getElementById('duration').textContent = `${report.duration_minutes.toFixed(1)}分`;
+                }
+                
+                // サマリー
+                document.getElementById('summary').textContent = report.summary || '情報なし';
+                
+                // 体調の変化
+                renderSection('health-changes', report.health_changes);
+                
+                // 食事の状況
+                renderSection('diet', report.diet);
+                
+                // 運動の状況
+                renderSection('exercise', report.exercise);
+                
+                // 薬の服用状況
+                renderSection('medication', report.medication);
+                
+                // 次回の来院予定
+                if (report.next_visit) {
+                    const nextVisit = report.next_visit;
+                    const confirmed = nextVisit.confirmed ? '確認済み' : '未確認';
+                    document.getElementById('next-visit').innerHTML = `
+                        <span class="status ${nextVisit.confirmed ? 'status-good' : 'status-warning'}">${confirmed}</span>
+                        <div class="details">${nextVisit.details || '情報なし'}</div>
+                    `;
+                }
+                
+                // 懸念事項
+                if (report.concerns && report.concerns.length > 0) {
+                    document.getElementById('concerns-section').style.display = 'block';
+                    const concernsList = document.getElementById('concerns-list');
+                    report.concerns.forEach(concern => {
+                        const li = document.createElement('li');
+                        li.textContent = concern;
+                        concernsList.appendChild(li);
+                    });
+                }
+                
+                // 推奨事項
+                if (report.recommendations && report.recommendations.length > 0) {
+                    document.getElementById('recommendations-section').style.display = 'block';
+                    const recommendationsList = document.getElementById('recommendations-list');
+                    report.recommendations.forEach(recommendation => {
+                        const li = document.createElement('li');
+                        li.textContent = recommendation;
+                        recommendationsList.appendChild(li);
+                    });
+                }
+                
+                // PDFリンク
+                document.getElementById('pdf-link').href = `/reports/${sessionId}/pdf`;
+                
+                // コンテンツを表示
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+                
+            } catch (error) {
+                document.getElementById('loading').textContent = 'エラー: ' + error.message;
+            }
+        }
+        
+        function renderSection(elementId, data) {
+            if (!data) {
+                document.getElementById(elementId).innerHTML = '<div class="details">情報なし</div>';
+                return;
+            }
+            
+            const statusClass = {
+                '良好': 'status-good',
+                '注意': 'status-warning',
+                '要観察': 'status-alert',
+                '不明': 'status-unknown'
+            }[data.status] || 'status-unknown';
+            
+            document.getElementById(elementId).innerHTML = `
+                <span class="status ${statusClass}">${data.status || '不明'}</span>
+                <div class="details">${data.details || '情報なし'}</div>
+            `;
+        }
+        
+        // ページ読み込み時にレポートを取得
+        loadReport();
+    </script>
+</body>
+</html>
+

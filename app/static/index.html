@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diabetes Checkup Voicebot - Browser Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f2f5;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            font-size: 1.5rem;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+        .status {
+            margin-bottom: 1rem;
+            font-weight: bold;
+            color: #666;
+            min-height: 1.5em;
+        }
+        button {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin: 0.5rem;
+        }
+        #startBtn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #startBtn:hover {
+            background-color: #45a049;
+        }
+        #startBtn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #stopBtn {
+            background-color: #f44336;
+            color: white;
+            display: none;
+        }
+        #stopBtn:hover {
+            background-color: #d32f2f;
+        }
+        .log {
+            margin-top: 1rem;
+            text-align: left;
+            font-size: 0.8rem;
+            color: #888;
+            max-height: 150px;
+            overflow-y: auto;
+            border-top: 1px solid #eee;
+            padding-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>定期検診 Voicebot (Browser)</h1>
+        <div style="text-align: right; margin-bottom: 20px;">
+            <a href="/reports-list" style="color: #2c7fb8; text-decoration: none; font-weight: bold;">レポート一覧を見る</a>
+        </div>
+        <div id="status" class="status">Ready to connect</div>
+        <div class="controls">
+            <button id="startBtn">通話開始</button>
+            <button id="stopBtn">通話終了</button>
+        </div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let audioContext = null;
+        let mediaStream = null;
+        let processor = null;
+        let inputSource = null;
+        let nextStartTime = 0;
+
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+
+        function log(msg) {
+            const p = document.createElement('p');
+            p.textContent = msg;
+            logDiv.prepend(p);
+            console.log(msg);
+        }
+
+        function updateStatus(msg) {
+            statusDiv.textContent = msg;
+        }
+
+        startBtn.onclick = async () => {
+            try {
+                startBtn.disabled = true;
+                updateStatus("Connecting...");
+
+                // Get Microphone Access
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Initialize Audio Context
+                // Note: Browser may ignore sampleRate parameter and use default (usually 44100Hz or 48000Hz)
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+                
+                // Resume audio context if suspended (browser autoplay policy)
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+                
+                log(`AudioContext State: ${audioContext.state}`);
+                log(`AudioContext Sample Rate: ${audioContext.sampleRate}Hz (requested 8000Hz)`);
+                if (audioContext.sampleRate !== 8000) {
+                    log(`Note: Browser is using ${audioContext.sampleRate}Hz. Server will resample to 8000Hz.`);
+                }
+
+                // WebSocket Connect
+                // Dynamic host for ngrok compatibility
+                const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+                const wsHost = window.location.host; 
+                websocket = new WebSocket(`${proto}://${wsHost}/browser-stream`);
+                websocket.binaryType = 'arraybuffer';
+
+                websocket.onopen = () => {
+                    updateStatus("Connected");
+                    startBtn.style.display = 'none';
+                    stopBtn.style.display = 'inline-block';
+                    log("WebSocket Connected");
+                    log("Starting audio recording...");
+                    startRecording();
+                };
+
+                websocket.onmessage = async (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.event === 'media') {
+                        playAudio(data.media.payload);
+                    } else if (data.event === 'clear') {
+                        log("Interrupt signal received");
+                        // Ideally we would clear the audio buffer here, but Web Audio API doesn't support clearing queued buffers easily without stopping.
+                        // For this prototype, we might just ignore it or restart context?
+                        // A simple way to simulate "stop" is to suspend/resume context, or just let it play out (latency might be issue).
+                        // Advanced: Use an AudioWorklet or a ring buffer that we can clear.
+                    }
+                };
+
+                websocket.onclose = () => {
+                    updateStatus("Disconnected");
+                    resetUI();
+                };
+
+                websocket.onerror = (error) => {
+                    log(`WebSocket Error: ${error}`);
+                };
+
+            } catch (e) {
+                log(`Error: ${e.message}`);
+                startBtn.disabled = false;
+            }
+        };
+
+        stopBtn.onclick = () => {
+            closeConnection();
+        };
+
+        function closeConnection() {
+            if (websocket) websocket.close();
+            if (audioContext) audioContext.close();
+            if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+            resetUI();
+        }
+
+        function resetUI() {
+            startBtn.disabled = false;
+            startBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'none';
+            updateStatus("Ready to connect");
+        }
+
+        function startRecording() {
+            inputSource = audioContext.createMediaStreamSource(mediaStream);
+            
+            // Use ScriptProcessor (deprecated but works for simple demo) or AudioWorklet
+            const bufferSize = 2048; 
+            processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+            let chunkCount = 0;
+            let firstChunk = true;
+            processor.onaudioprocess = (e) => {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    
+                    // Check if there's actual audio (not silence)
+                    let hasAudio = false;
+                    for (let i = 0; i < inputData.length; i++) {
+                        if (Math.abs(inputData[i]) > 0.01) {
+                            hasAudio = true;
+                            break;
+                        }
+                    }
+                    
+                    if (firstChunk) {
+                        log(`First audio chunk received. Has audio: ${hasAudio}, Length: ${inputData.length}`);
+                        firstChunk = false;
+                    }
+                    
+                    // Convert Float32 [-1, 1] to Int16 PCM
+                    const pcmData = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        let s = Math.max(-1, Math.min(1, inputData[i]));
+                        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+                    
+                    // Convert Int16Array to Uint8Array (bytes)
+                    const uint8Array = new Uint8Array(pcmData.buffer);
+                    
+                    // Convert to Base64 directly (more efficient than FileReader)
+                    let binary = '';
+                    for (let i = 0; i < uint8Array.length; i++) {
+                        binary += String.fromCharCode(uint8Array[i]);
+                    }
+                    const base64data = btoa(binary);
+                    
+                    // Send to server
+                    try {
+                        websocket.send(JSON.stringify({
+                            event: 'media',
+                            media: {
+                                payload: base64data
+                            }
+                        }));
+                        chunkCount++;
+                        if (chunkCount === 1 || chunkCount % 100 === 0) {
+                            log(`Sent ${chunkCount} audio chunks (${base64data.length} bytes)`);
+                        }
+                    } catch (err) {
+                        log(`Error sending audio: ${err.message}`);
+                    }
+                }
+            };
+
+            inputSource.connect(processor);
+            processor.connect(audioContext.destination);
+        }
+
+        function playAudio(base64Data) {
+            try {
+                // Decode Base64 to ArrayBuffer
+                const binaryString = window.atob(base64Data);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                log(`Received audio chunk: ${len} bytes (u-law)`);
+
+                // This is u-law data coming from server (as per our current main.py logic).
+                // We need to decode u-law to PCM Float32 for Web Audio API.
+                const float32Data = ulawToFloat32(bytes);
+                
+                const audioBuffer = audioContext.createBuffer(1, float32Data.length, 8000);
+                audioBuffer.getChannelData(0).set(float32Data);
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                
+                // Simple scheduling to play sequentially
+                const currentTime = audioContext.currentTime;
+                if (nextStartTime < currentTime) {
+                    nextStartTime = currentTime;
+                }
+                source.start(nextStartTime);
+                nextStartTime += audioBuffer.duration;
+                
+                log(`Scheduled audio at ${nextStartTime.toFixed(2)}s`);
+            } catch (e) {
+                log(`Error playing audio: ${e.message}`);
+            }
+        }
+
+        // u-law decoder implementation
+        function ulawToFloat32(uLawBuffer) {
+            const decoded = new Float32Array(uLawBuffer.length);
+            for (let i = 0; i < uLawBuffer.length; i++) {
+                const ulaw = uLawBuffer[i];
+                ulaw = ~ulaw; // Invert
+                const sign = (ulaw & 0x80);
+                const exponent = (ulaw >> 4) & 0x07;
+                const mantissa = ulaw & 0x0F;
+                let sample = (0x21 | (mantissa << 1)) << exponent;
+                sample = (sample - 0x21); // Bias
+                if (sign) sample = -sample;
+                decoded[i] = sample / 32768.0;
+            }
+            return decoded;
+        }
+    </script>
+</body>
+</html>
+
