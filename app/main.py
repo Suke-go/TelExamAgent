@@ -287,7 +287,6 @@ async def browser_websocket_endpoint(websocket: WebSocket):
             report_service = ReportService(OPENAI_API_KEY)
             report = await report_service.generate_report(session)
             # レポートも保存
-            import json
             from pathlib import Path
             reports_dir = Path("data/reports")
             reports_dir.mkdir(parents=True, exist_ok=True)
