@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ElevenLabs TTS Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .input-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        textarea {
+            min-height: 100px;
+            font-family: monospace;
+        }
+        button {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 0.5rem;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .log p {
+            margin: 0.25rem 0;
+            padding: 0.25rem;
+            border-left: 3px solid #4CAF50;
+            padding-left: 0.5rem;
+        }
+        .log .error {
+            border-left-color: #f44336;
+            color: #d32f2f;
+        }
+        .log .info {
+            border-left-color: #2196F3;
+            color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ElevenLabs TTS Streaming Test</h1>
+        
+        <div class="input-group">
+            <label for="apiKey">ElevenLabs API Key:</label>
+            <input type="password" id="apiKey" placeholder="sk-...">
+        </div>
+        
+        <div class="input-group">
+            <label for="voiceId">Voice ID:</label>
+            <input type="text" id="voiceId" value="21m00Tcm4TlvDq8ikWAM" placeholder="Voice ID">
+        </div>
+        
+        <div class="input-group">
+            <label for="text">Text to Speak (Japanese):</label>
+            <textarea id="text">こんにちは。定期検診システムです。お話しください。</textarea>
+        </div>
+        
+        <button id="testBtn">Test TTS</button>
+        <button id="stopBtn" disabled>Stop</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let audioContext = null;
+        let nextStartTime = 0;
+
+        const apiKeyInput = document.getElementById('apiKey');
+        const voiceIdInput = document.getElementById('voiceId');
+        const textInput = document.getElementById('text');
+        const testBtn = document.getElementById('testBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const logDiv = document.getElementById('log');
+
+        function log(msg, type = 'info') {
+            const p = document.createElement('p');
+            p.className = type;
+            p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logDiv.prepend(p);
+            console.log(msg);
+        }
+
+        testBtn.onclick = async () => {
+            const apiKey = apiKeyInput.value.trim();
+            const voiceId = voiceIdInput.value.trim();
+            const text = textInput.value.trim();
+
+            if (!apiKey || !voiceId || !text) {
+                log("Please fill in all fields", "error");
+                return;
+            }
+
+            try {
+                testBtn.disabled = true;
+                stopBtn.disabled = false;
+
+                // Initialize Audio Context
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+                log(`AudioContext initialized: ${audioContext.state}, sampleRate: ${audioContext.sampleRate}Hz`);
+
+                // Connect to ElevenLabs
+                const uri = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=eleven_turbo_v2_5&output_format=ulaw_8000`;
+                log(`Connecting to: ${uri}`);
+                
+                websocket = new WebSocket(uri);
+                
+                websocket.onopen = () => {
+                    log("WebSocket connected to ElevenLabs");
+                    
+                    // Send initial config
+                    websocket.send(JSON.stringify({
+                        "text": " ",
+                        "voice_settings": {
+                            "stability": 0.5,
+                            "similarity_boost": 0.8
+                        },
+                        "xi_api_key": apiKey
+                    }));
+                    log("Sent initial config");
+                    
+                    // Send text
+                    websocket.send(JSON.stringify({
+                        "text": text,
+                        "try_trigger_generation": true
+                    }));
+                    log(`Sent text: "${text}"`);
+                    
+                    // Send flush
+                    websocket.send(JSON.stringify({
+                        "text": "",
+                        "flush": true
+                    }));
+                    log("Sent flush message");
+                    
+                    // Send EOS
+                    setTimeout(() => {
+                        if (websocket && websocket.readyState === WebSocket.OPEN) {
+                            websocket.send(JSON.stringify({"text": ""}));
+                            log("Sent EOS");
+                        }
+                    }, 1000);
+                };
+
+                websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`Received: ${JSON.stringify(data, null, 2)}`, "info");
+                        
+                        if (data.audio) {
+                            const audioBytes = atob(data.audio);
+                            log(`Audio chunk: ${audioBytes.length} bytes (base64 decoded)`);
+                            playAudio(data.audio);
+                        }
+                        
+                        if (data.isFinal) {
+                            log("Received isFinal=true", "info");
+                        }
+                    } catch (e) {
+                        log(`Error parsing message: ${e.message}`, "error");
+                    }
+                };
+
+                websocket.onerror = (error) => {
+                    log(`WebSocket error: ${error}`, "error");
+                };
+
+                websocket.onclose = (event) => {
+                    log(`WebSocket closed: code=${event.code}, reason=${event.reason}`, "info");
+                    testBtn.disabled = false;
+                    stopBtn.disabled = true;
+                };
+
+            } catch (e) {
+                log(`Error: ${e.message}`, "error");
+                testBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        };
+
+        stopBtn.onclick = () => {
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            log("Stopped");
+            testBtn.disabled = false;
+            stopBtn.disabled = true;
+        };
+
+        function playAudio(base64Data) {
+            try {
+                const binaryString = window.atob(base64Data);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                log(`Playing audio: ${len} bytes (u-law)`);
+
+                // Decode u-law to Float32
+                const float32Data = ulawToFloat32(bytes);
+                
+                const audioBuffer = audioContext.createBuffer(1, float32Data.length, 8000);
+                audioBuffer.getChannelData(0).set(float32Data);
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                
+                const currentTime = audioContext.currentTime;
+                if (nextStartTime < currentTime) {
+                    nextStartTime = currentTime;
+                }
+                source.start(nextStartTime);
+                nextStartTime += audioBuffer.duration;
+                
+                log(`Scheduled audio at ${nextStartTime.toFixed(2)}s`);
+            } catch (e) {
+                log(`Error playing audio: ${e.message}`, "error");
+            }
+        }
+
+        function ulawToFloat32(uLawBuffer) {
+            const decoded = new Float32Array(uLawBuffer.length);
+            for (let i = 0; i < uLawBuffer.length; i++) {
+                let ulaw = uLawBuffer[i];
+                ulaw = ~ulaw;
+                const sign = (ulaw & 0x80);
+                const exponent = (ulaw >> 4) & 0x07;
+                const mantissa = ulaw & 0x0F;
+                let sample = (0x21 | (mantissa << 1)) << exponent;
+                sample = (sample - 0x21);
+                if (sign) sample = -sample;
+                decoded[i] = sample / 32768.0;
+            }
+            return decoded;
+        }
+    </script>
+</body>
+</html>
+

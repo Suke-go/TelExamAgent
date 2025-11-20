@@ -35,6 +35,10 @@ ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 async def get():
     return FileResponse("app/static/index.html")
 
+@app.get("/tts-test")
+async def tts_test():
+    return FileResponse("app/static/tts-test.html")
+
 # --- Report Endpoints ---
 @app.get("/reports")
 async def list_reports():
