@@ -76,11 +76,13 @@ class STTService:
     async def send_audio(self, audio_data: bytes):
         """Send audio bytes to Deepgram"""
         if self.connection:
-            await self.connection.send(audio_data)
+            # Deepgram SDK v3 send() returns bool immediately
+            self.connection.send(audio_data)
 
     async def stop(self):
         if self.connection:
-            await self.connection.finish()
+            # Deepgram SDK v3 finish() returns bool immediately
+            self.connection.finish()
             self.connection = None
             print("Deepgram STT stopped.")
 
