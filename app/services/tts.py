@@ -1,114 +1,110 @@
 import asyncio
-import websockets
-import json
+import aiohttp
 import base64
 import os
 from typing import AsyncGenerator
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TTSService:
-    def __init__(self, api_key: str, voice_id: str = "21m00Tcm4TlvDq8ikWAM"): # Rachel (American) - Change to a Japanese voice ID
-        # For Japanese, we should use a multi-lingual model and a Japanese voice.
-        # Let's use a placeholder generic Japanese voice ID if known, or default to Rachel and hope for Multilingual v2 to handle it.
-        # Better yet, let's assume the user will provide a valid Voice ID.
-        # Recommended for Japanese: "21m00Tcm4TlvDq8ikWAM" is Rachel, but we need a Japanese one or Multilingual.
-        # "eleven_turbo_v2_5" supports Japanese.
+    def __init__(self, api_key: str, voice_id: str = "alloy"):
+        """
+        OpenAI TTS Service
+        voice_id options: alloy, echo, fable, onyx, nova, shimmer
+        For Japanese, 'nova' or 'shimmer' work well.
+        """
         self.api_key = api_key
-        self.voice_id = "21m00Tcm4TlvDq8ikWAM" # Placeholder, user should update
-        self.model_id = "eleven_turbo_v2_5" 
-        self.websocket = None
+        self.voice_id = voice_id
+        self.model = "tts-1"  # Use tts-1 for lower latency, tts-1-hd for higher quality
+        self.client = None
 
     async def connect(self):
-        uri = f"wss://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}/stream-input?model_id={self.model_id}&output_format=ulaw_8000"
-        try:
-            # Add timeout for connection
-            print(f"Connecting to ElevenLabs WS: {uri}")
-            self.websocket = await asyncio.wait_for(websockets.connect(uri), timeout=10.0)
-            
-            # Send initial configuration (optional but good practice)
-            # BOS message
-            await self.websocket.send(json.dumps({
-                "text": " ",
-                "voice_settings": {
-                    "stability": 0.5,
-                    "similarity_boost": 0.8
-                },
-                "xi_api_key": self.api_key
-            }))
-            print("Connected to ElevenLabs TTS")
-        except asyncio.TimeoutError:
-            print("Timeout connecting to ElevenLabs TTS")
-            raise
-        except Exception as e:
-            print(f"Error connecting to ElevenLabs: {e}")
-            raise
+        """No connection needed for OpenAI TTS (HTTP API)"""
+        logger.info("OpenAI TTS service ready (no connection needed)")
 
     async def stream_text(self, text_iterator: AsyncGenerator[str, None]) -> AsyncGenerator[bytes, None]:
         """
-        Takes an async generator of text (from LLM) and yields audio bytes (u-law 8000).
+        Takes an async generator of text (from LLM) and yields audio bytes (PCM16, 24000Hz).
+        Note: OpenAI TTS returns PCM16 at 24000Hz, but we need u-law at 8000Hz for our pipeline.
+        We'll convert it.
         """
-        if not self.websocket:
-            await self.connect()
-
-        # Task to send text to websocket
-        async def send_text():
-            try:
-                async for text_chunk in text_iterator:
-                    if self.websocket:
-                        await self.websocket.send(json.dumps({
-                            "text": text_chunk,
-                            "try_trigger_generation": True
-                        }))
-                        print(f"Sent text to ElevenLabs: '{text_chunk[:50]}...' (length: {len(text_chunk)})")
-                # Send flush to trigger generation
-                if self.websocket:
-                    await self.websocket.send(json.dumps({"text": "", "flush": True}))
-                    print("Sent flush message to ElevenLabs")
-                # Send EOS
-                if self.websocket:
-                    await self.websocket.send(json.dumps({"text": ""}))
-                    print("Sent EOS to ElevenLabs") 
-            except Exception as e:
-                print(f"Error sending text to TTS: {e}")
-
-        # Start sending task
-        sender_task = asyncio.create_task(send_text())
-
-        # Receive audio
+        # Collect all text first (OpenAI TTS doesn't support streaming input)
+        full_text = ""
+        async for text_chunk in text_iterator:
+            full_text += text_chunk
+        
+        if not full_text.strip():
+            return
+        
+        logger.info(f"Generating TTS for: {full_text[:50]}... (length: {len(full_text)})")
+        
+        # OpenAI TTS API endpoint
+        url = "https://api.openai.com/v1/audio/speech"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": self.model,
+            "input": full_text,
+            "voice": self.voice_id,
+            "response_format": "pcm",  # PCM16 format
+            "speed": 1.0
+        }
+        
         try:
-            message_count = 0
-            while True:
-                if not self.websocket:
-                    break
-                try:
-                    message = await self.websocket.recv()
-                    message_count += 1
-                    data = json.loads(message)
-                    print(f"ElevenLabs message #{message_count}: {json.dumps(data, indent=2)}")
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"OpenAI TTS API error: {response.status} - {error_text}")
+                        return
                     
-                    if data.get("audio"):
-                        # Decode base64 audio
-                        audio_chunk = base64.b64decode(data["audio"])
-                        print(f"Decoded audio chunk: {len(audio_chunk)} bytes")
-                        if audio_chunk:
-                            yield audio_chunk
-                    else:
-                        print(f"No 'audio' field in message #{message_count}")
-                            
-                    if data.get("isFinal"):
-                        print(f"Received isFinal=True, ending stream")
-                        break
-                except websockets.exceptions.ConnectionClosed:
-                    print("ElevenLabs connection closed")
-                    break
+                    # Read audio data in chunks
+                    async for chunk in response.content.iter_chunked(4096):
+                        if chunk:
+                            # Convert PCM16 (24000Hz) to u-law (8000Hz)
+                            # First, resample to 8000Hz, then convert to u-law
+                            audio_bytes = await self._convert_pcm16_to_ulaw_8k(chunk)
+                            if audio_bytes:
+                                yield audio_bytes
+                    
+                    logger.info("OpenAI TTS audio generation completed")
         except Exception as e:
-            print(f"Error receiving audio from TTS: {e}", exc_info=True)
-        finally:
-             # Make sure sender task is done
-             if not sender_task.done():
-                 sender_task.cancel()
+            logger.error(f"Error in OpenAI TTS: {e}", exc_info=True)
+
+    async def _convert_pcm16_to_ulaw_8k(self, pcm16_data: bytes) -> bytes:
+        """
+        Convert PCM16 (24000Hz) to u-law (8000Hz).
+        This is a simplified conversion - for production, use proper resampling.
+        """
+        try:
+            # Convert bytes to numpy array (int16)
+            audio_np = np.frombuffer(pcm16_data, dtype=np.int16)
+            
+            if len(audio_np) == 0:
+                return b""
+            
+            # Resample from 24000Hz to 8000Hz
+            original_rate = 24000
+            target_rate = 8000
+            num_samples = int(len(audio_np) * target_rate / original_rate)
+            
+            if num_samples > 0:
+                resampled_audio = signal.resample(audio_np, num_samples)
+                resampled_pcm = resampled_audio.astype(np.int16).tobytes()
+                
+                # Convert PCM16 to u-law
+                ulaw_data = audioop.lin2ulaw(resampled_pcm, 2)
+                return ulaw_data
+            else:
+                return b""
+        except Exception as e:
+            logger.error(f"Error converting audio format: {e}")
+            return b""
 
     async def close(self):
-        if self.websocket:
-            await self.websocket.close()
-            self.websocket = None
-
+        """No cleanup needed for OpenAI TTS"""
+        pass

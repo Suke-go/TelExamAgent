@@ -28,8 +28,9 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Configuration
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM" 
+# Using OpenAI TTS instead of ElevenLabs (ElevenLabs free tier blocked on Railway)
+# Voice options: alloy, echo, fable, onyx, nova, shimmer (nova or shimmer work well for Japanese)
+OPENAI_TTS_VOICE = "nova"  # Good for Japanese 
 
 @app.get("/")
 async def get():
@@ -129,7 +130,7 @@ async def browser_websocket_endpoint(websocket: WebSocket):
 
     vad_service = VADService()
     llm_service = LLMService(OPENAI_API_KEY)
-    tts_service = TTSService(ELEVENLABS_API_KEY, voice_id=ELEVENLABS_VOICE_ID)
+    tts_service = TTSService(OPENAI_API_KEY, voice_id=OPENAI_TTS_VOICE)
     
     stt_service = None
     is_ai_speaking = False
@@ -335,7 +336,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # TTS Service needs to be re-instantiated or connected per turn? 
     # ElevenLabs WS usually handles one stream. We might keep it open or reconnect.
     # For simplicity/robustness, let's keep one instance but manage connection state.
-    tts_service = TTSService(ELEVENLABS_API_KEY, voice_id=ELEVENLABS_VOICE_ID)
+    tts_service = TTSService(OPENAI_API_KEY, voice_id=OPENAI_TTS_VOICE)
     
     # State
     stream_sid = None
