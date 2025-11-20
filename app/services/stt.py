@@ -59,7 +59,10 @@ class STTService:
             )
 
             # Start connection
-            if await self.connection.start(options) is False:
+            # Note: Deepgram SDK v3 start() might be synchronous or async depending on usage.
+            # If it returns bool directly, await will fail.
+            # Try without await first based on error "object bool can't be used in 'await' expression"
+            if self.connection.start(options) is False:
                 print("Failed to start Deepgram connection")
                 return False
             
