@@ -2,8 +2,11 @@ import asyncio
 import aiohttp
 import base64
 import os
+import audioop
 from typing import AsyncGenerator
 import logging
+import numpy as np
+from scipy import signal
 
 logger = logging.getLogger(__name__)
 
