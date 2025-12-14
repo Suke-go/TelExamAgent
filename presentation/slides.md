@@ -37,8 +37,6 @@ style: |
 
 <br>
 
-清水 紘輔
-筑波大学 | 2025
 
 ---
 
@@ -82,10 +80,10 @@ style: |
 | モジュール | 機能 | 技術スタック |
 |:---|:---|:---|
 | 電話インフラ | 架電・着信の管理 | Twilio Voice API |
-| Speech-to-Text | 音声からテキストへ変換 | Google Cloud STT |
-| Intent Inference | 発話意図の推論 | Gemini API |
+| Speech-to-Text | 音声からテキストへ変換 | Deepgram STT |
+| Intent Inference | 発話意図の推論 | OpenAI API |
 | Dialogue Manager | 対話状態の管理 | Python/FastAPI |
-| Text-to-Speech | 応答音声の生成 | Google Cloud TTS |
+| Text-to-Speech | 応答音声の生成 | ElevenLabs TTS |
 
 ---
 
