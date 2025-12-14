@@ -4,17 +4,12 @@ __pycache__/
 *$py.class
 .venv/
 venv/
-env/
 *.so
 
-# Environment variables
+# Environment
 .env
-.env.*
-env.example
-env copy.example
-*.env
 
-# Distribution / packaging
+# Distribution
 dist/
 build/
 *.egg-info/
@@ -24,6 +19,8 @@ build/
 .idea/
 *.swp
 
+# Data (sessions/reports)
+/data
+
 # Logs
 *.log
-

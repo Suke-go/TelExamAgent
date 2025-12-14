@@ -1,194 +1,753 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Diabetes Checkup Voicebot - Browser Test</title>
+    <title>定期検診 Voicebot</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            min-height: 100vh;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            background-color: #f0f2f5;
-            margin: 0;
+            padding: 20px;
         }
+
         .container {
             background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            text-align: center;
-            max-width: 400px;
+            border-radius: 20px;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
             width: 100%;
+            max-width: 480px;
+            overflow: hidden;
         }
-        h1 {
-            font-size: 1.5rem;
-            color: #333;
-            margin-bottom: 1.5rem;
+
+        .header {
+            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+            color: white;
+            padding: 24px;
+            text-align: center;
+            position: relative;
         }
-        .status {
-            margin-bottom: 1rem;
-            font-weight: bold;
-            color: #666;
-            min-height: 1.5em;
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.6rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
-        button {
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            margin: 0.5rem;
+
+        .header .subtitle {
+            margin-top: 8px;
+            font-size: 0.95rem;
+            opacity: 0.9;
         }
-        #startBtn {
-            background-color: #4CAF50;
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.85);
+            text-decoration: none;
+            font-size: 0.85rem;
+            margin-top: 12px;
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.15);
+            transition: all 0.3s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.25);
             color: white;
         }
-        #startBtn:hover {
-            background-color: #45a049;
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: linear-gradient(180deg, #f8f9fa 0%, #fff 100%);
+            border-bottom: 1px solid #e8e8e8;
         }
+
+        .status-indicator {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #bbb;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .status-indicator::after {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            right: -3px;
+            bottom: -3px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+        }
+
+        .status-indicator.connecting {
+            background: #FFC107;
+            animation: connecting-pulse 1s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #4CAF50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+
+        .status-indicator.speaking {
+            background: #2196F3;
+            animation: speaking-pulse 0.3s infinite alternate;
+        }
+
+        .status-indicator.listening {
+            background: #FF9800;
+            animation: listening-pulse 0.8s infinite;
+        }
+
+        @keyframes connecting-pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+        }
+
+        @keyframes speaking-pulse {
+            from {
+                transform: scale(1);
+                box-shadow: 0 0 5px rgba(33, 150, 243, 0.5);
+            }
+
+            to {
+                transform: scale(1.15);
+                box-shadow: 0 0 15px rgba(33, 150, 243, 0.8);
+            }
+        }
+
+        @keyframes listening-pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .status-text {
+            font-size: 0.95rem;
+            color: #444;
+            font-weight: 500;
+        }
+
+        .audio-level {
+            width: 80px;
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .audio-level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A, #CDDC39);
+            width: 0%;
+            transition: width 0.05s;
+            border-radius: 5px;
+        }
+
+        .conversation {
+            height: 320px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fafafa;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            animation: message-in 0.3s ease-out;
+        }
+
+        @keyframes message-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-items: flex-end;
+        }
+
+        .message.ai {
+            align-items: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 85%;
+            padding: 14px 18px;
+            border-radius: 20px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 6px;
+        }
+
+        .message.ai .message-bubble {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+            border-bottom-left-radius: 6px;
+        }
+
+        .message-label {
+            font-size: 0.75rem;
+            color: #888;
+            margin-bottom: 5px;
+            padding: 0 10px;
+        }
+
+        .current-speech {
+            padding: 18px 20px;
+            background: linear-gradient(180deg, #fff 0%, #f8f9fa 100%);
+            border-top: 1px solid #e8e8e8;
+            min-height: 70px;
+        }
+
+        .current-speech-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .current-speech-text {
+            font-size: 1rem;
+            color: #333;
+            min-height: 24px;
+            line-height: 1.5;
+        }
+
+        .current-speech-text.typing::after {
+            content: '▊';
+            animation: blink 0.8s infinite;
+            color: #667eea;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0;
+            }
+        }
+
+        .controls {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            background: white;
+            border-top: 1px solid #e8e8e8;
+        }
+
+        button {
+            padding: 16px 36px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        button:hover::before {
+            left: 100%;
+        }
+
+        #startBtn {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white;
+        }
+
+        #startBtn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(76, 175, 80, 0.45);
+        }
+
         #startBtn:disabled {
-            background-color: #ccc;
+            background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
             cursor: not-allowed;
+            transform: none;
         }
+
+        #startBtn.loading {
+            background: linear-gradient(135deg, #FFC107 0%, #FF9800 100%);
+        }
+
         #stopBtn {
-            background-color: #f44336;
+            background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
             color: white;
             display: none;
         }
+
         #stopBtn:hover {
-            background-color: #d32f2f;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(244, 67, 54, 0.45);
         }
-        .log {
-            margin-top: 1rem;
-            text-align: left;
+
+        .loader {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 50px 20px;
+        }
+
+        .empty-state-icon {
+            font-size: 3.5rem;
+            margin-bottom: 15px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .preload-status {
             font-size: 0.8rem;
             color: #888;
-            max-height: 150px;
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .preload-status.ready {
+            color: #4CAF50;
+        }
+
+        .debug-toggle {
+            font-size: 0.8rem;
+            color: #888;
+            background: none;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            margin: 0 auto;
+            display: block;
+        }
+
+        .debug-log {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s;
+            background: #1a1a2e;
+            color: #a0a0a0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.75rem;
+        }
+
+        .debug-log.show {
+            max-height: 180px;
+        }
+
+        .debug-log-inner {
+            padding: 12px;
+            max-height: 180px;
             overflow-y: auto;
-            border-top: 1px solid #eee;
-            padding-top: 0.5rem;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <h1>定期検診 Voicebot (Browser)</h1>
-        <div style="text-align: right; margin-bottom: 20px;">
-            <a href="/reports-list" style="color: #2c7fb8; text-decoration: none; font-weight: bold;">レポート一覧を見る</a>
+        <div class="header">
+            <h1>🏥 定期検診 Voicebot</h1>
+            <div class="subtitle">AI医療アシスタント「サクラ」</div>
+            <a href="/reports-list" class="nav-link">📋 レポート一覧</a>
         </div>
-        <div id="status" class="status">Ready to connect</div>
+
+        <div class="status-bar">
+            <div id="statusIndicator" class="status-indicator"></div>
+            <span id="statusText" class="status-text">待機中</span>
+            <div class="audio-level">
+                <div id="audioLevelBar" class="audio-level-bar"></div>
+            </div>
+        </div>
+
+        <div id="conversation" class="conversation">
+            <div class="empty-state">
+                <div class="empty-state-icon">🎙️</div>
+                <div>「通話開始」を押して会話を始めましょう</div>
+                <div id="preloadStatus" class="preload-status">
+                    <span class="loader" style="width:12px;height:12px;border-width:1px;"></span>
+                    準備中...
+                </div>
+            </div>
+        </div>
+
+        <div class="current-speech">
+            <div class="current-speech-label" id="currentSpeechLabel">🔇 待機中</div>
+            <div class="current-speech-text" id="currentSpeechText"></div>
+        </div>
+
         <div class="controls">
-            <button id="startBtn">通話開始</button>
-            <button id="stopBtn">通話終了</button>
+            <button id="startBtn" disabled>
+                <span class="loader"></span>
+                <span id="startBtnText">準備中...</span>
+            </button>
+            <button id="stopBtn">📞 通話終了</button>
         </div>
-        <div id="log" class="log"></div>
+
+        <button class="debug-toggle" onclick="toggleDebug()">🔧 デバッグログ</button>
+        <div id="debugLog" class="debug-log">
+            <div id="debugLogInner" class="debug-log-inner"></div>
+        </div>
     </div>
 
     <script>
+        // State
         let websocket = null;
         let audioContext = null;
         let mediaStream = null;
         let processor = null;
         let inputSource = null;
         let nextStartTime = 0;
+        let currentAiText = '';
+        let greetingPreloaded = false;
+        let preloadedGreeting = null;
+        let isPlaying = false;
 
+        // DOM elements
         const startBtn = document.getElementById('startBtn');
+        const startBtnText = document.getElementById('startBtnText');
         const stopBtn = document.getElementById('stopBtn');
-        const statusDiv = document.getElementById('status');
-        const logDiv = document.getElementById('log');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const audioLevelBar = document.getElementById('audioLevelBar');
+        const conversationDiv = document.getElementById('conversation');
+        const currentSpeechLabel = document.getElementById('currentSpeechLabel');
+        const currentSpeechText = document.getElementById('currentSpeechText');
+        const debugLogInner = document.getElementById('debugLogInner');
+        const preloadStatus = document.getElementById('preloadStatus');
 
         function log(msg) {
-            const p = document.createElement('p');
-            p.textContent = msg;
-            logDiv.prepend(p);
+            const time = new Date().toLocaleTimeString();
+            const p = document.createElement('div');
+            p.textContent = `[${time}] ${msg}`;
+            debugLogInner.prepend(p);
             console.log(msg);
         }
 
-        function updateStatus(msg) {
-            statusDiv.textContent = msg;
+        function toggleDebug() {
+            document.getElementById('debugLog').classList.toggle('show');
+        }
+
+        function updateStatus(status, indicator = '') {
+            statusText.textContent = status;
+            statusIndicator.className = 'status-indicator ' + indicator;
+        }
+
+        function addMessage(role, text) {
+            const emptyState = conversationDiv.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            const label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = role === 'user' ? '👤 あなた' : '🤖 サクラ';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = text;
+
+            messageDiv.appendChild(label);
+            messageDiv.appendChild(bubble);
+            conversationDiv.appendChild(messageDiv);
+            conversationDiv.scrollTop = conversationDiv.scrollHeight;
+        }
+
+        function updateCurrentSpeech(label, text, isTyping = false) {
+            currentSpeechLabel.textContent = label;
+            currentSpeechText.textContent = text;
+            currentSpeechText.className = 'current-speech-text' + (isTyping ? ' typing' : '');
+        }
+
+        // Preload greeting on page load
+        async function preloadGreeting() {
+            try {
+                log('Preloading greeting audio...');
+                const response = await fetch('/api/preload-greeting');
+                const data = await response.json();
+
+                if (data.status === 'ok' && data.audio) {
+                    preloadedGreeting = data;
+                    greetingPreloaded = true;
+                    preloadStatus.innerHTML = '✅ 準備完了';
+                    preloadStatus.className = 'preload-status ready';
+                    startBtn.disabled = false;
+                    startBtn.querySelector('.loader').style.display = 'none';
+                    startBtnText.textContent = '🎤 通話開始';
+                    log('Greeting preloaded successfully');
+                } else {
+                    throw new Error(data.message || 'Preload failed');
+                }
+            } catch (e) {
+                log(`Preload error: ${e.message}`);
+                // Still allow starting without preload
+                preloadStatus.innerHTML = '⚠️ 準備完了（遅延あり）';
+                startBtn.disabled = false;
+                startBtn.querySelector('.loader').style.display = 'none';
+                startBtnText.textContent = '🎤 通話開始';
+            }
+        }
+
+        // Initialize AudioContext
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioContext;
+        }
+
+        // Play preloaded greeting immediately
+        async function playPreloadedGreeting() {
+            if (!preloadedGreeting) return;
+
+            const ctx = initAudioContext();
+            if (ctx.state === 'suspended') {
+                await ctx.resume();
+            }
+
+            // Add greeting to chat
+            addMessage('ai', preloadedGreeting.text);
+            updateStatus('サクラが話しています', 'speaking');
+            updateCurrentSpeech('🔊 サクラが話しています...', preloadedGreeting.text);
+
+            // Play audio
+            playAudio(preloadedGreeting.audio);
+
+            // After audio finishes, update status
+            const audioDuration = (preloadedGreeting.audio.length * 0.75) / 8000; // rough estimate
+            setTimeout(() => {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    updateStatus('聞いています...', 'listening');
+                    updateCurrentSpeech('🎧 お話しください...', '');
+                }
+            }, audioDuration * 1000 + 500);
         }
 
         startBtn.onclick = async () => {
             try {
                 startBtn.disabled = true;
-                updateStatus("Connecting...");
+                startBtn.classList.add('loading');
+                startBtnText.textContent = '接続中...';
+                updateStatus('接続中...', 'connecting');
 
-                // Get Microphone Access
-                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
+                // Get Microphone Access with echo cancellation
+                log('Requesting microphone access...');
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                log('Microphone access granted');
+
                 // Initialize Audio Context
-                // Note: Browser may ignore sampleRate parameter and use default (usually 44100Hz or 48000Hz)
-                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
-                
-                // Resume audio context if suspended (browser autoplay policy)
+                initAudioContext();
                 if (audioContext.state === 'suspended') {
                     await audioContext.resume();
                 }
-                
-                log(`AudioContext State: ${audioContext.state}`);
-                log(`AudioContext Sample Rate: ${audioContext.sampleRate}Hz (requested 8000Hz)`);
-                if (audioContext.sampleRate !== 8000) {
-                    log(`Note: Browser is using ${audioContext.sampleRate}Hz. Server will resample to 8000Hz.`);
-                }
+                log(`AudioContext: ${audioContext.sampleRate}Hz`);
 
                 // WebSocket Connect
-                // Dynamic host for ngrok compatibility
                 const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-                const wsHost = window.location.host; 
+                const wsHost = window.location.host;
                 websocket = new WebSocket(`${proto}://${wsHost}/browser-stream`);
                 websocket.binaryType = 'arraybuffer';
 
-                websocket.onopen = () => {
-                    updateStatus("Connected");
+                websocket.onopen = async () => {
+                    log('WebSocket connected');
                     startBtn.style.display = 'none';
-                    stopBtn.style.display = 'inline-block';
-                    log("WebSocket Connected");
-                    log("Starting audio recording...");
+                    stopBtn.style.display = 'inline-flex';
+
+                    // Send sample rate config and whether greeting is preloaded
+                    websocket.send(JSON.stringify({
+                        event: 'config',
+                        sampleRate: audioContext.sampleRate,
+                        greetingPreloaded: greetingPreloaded
+                    }));
+
+                    // Play preloaded greeting immediately
+                    if (greetingPreloaded) {
+                        await playPreloadedGreeting();
+                    } else {
+                        updateStatus('聞いています...', 'listening');
+                        updateCurrentSpeech('🎧 お話しください...', '');
+                    }
+
+                    // Start recording
                     startRecording();
                 };
 
                 websocket.onmessage = async (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        log(`Received WebSocket message: event=${data.event}`);
+
                         if (data.event === 'media') {
                             if (data.media && data.media.payload) {
-                                log(`Media payload length: ${data.media.payload.length} chars (base64)`);
                                 playAudio(data.media.payload);
-                            } else {
-                                log("ERROR: media event but no payload!");
                             }
+                        } else if (data.event === 'transcript') {
+                            // Show buffered text if available, otherwise show fragment
+                            const displayText = data.buffered || data.text;
+                            log(`User: ${displayText}`);
+
+                            if (data.is_final !== false) {
+                                // Final transcript - add to messages
+                                addMessage('user', displayText);
+                                updateCurrentSpeech('🎧 処理中...', '');
+                            } else {
+                                // Preview - show in current speech area
+                                updateCurrentSpeech('🎤 聞き取り中...', displayText);
+                            }
+                        } else if (data.event === 'ai_started') {
+                            log('AI started speaking');
+                            updateStatus('サクラが話しています', 'speaking');
+                            currentAiText = '';
+                        } else if (data.event === 'ai_text') {
+                            currentAiText += data.text;
+                            updateCurrentSpeech('🔊 サクラが話しています...', currentAiText, true);
+                        } else if (data.event === 'ai_finished') {
+                            log('AI finished speaking');
+                            // Add complete message
+                            if (currentAiText.trim()) {
+                                addMessage('ai', currentAiText);
+                            }
+                            currentAiText = '';
+                            updateCurrentSpeech('🎧 お話しください...', '');
+                            updateStatus('聞いています...', 'listening');
+                        } else if (data.event === 'ai_stopped') {
+                            log('AI stopped (interrupted)');
+                            // Don't add incomplete message
+                            currentAiText = '';
+                            updateCurrentSpeech('🎧 お話しください...', '');
+                            updateStatus('聞いています...', 'listening');
                         } else if (data.event === 'clear') {
-                            log("Interrupt signal received");
-                            // Ideally we would clear the audio buffer here, but Web Audio API doesn't support clearing queued buffers easily without stopping.
-                            // For this prototype, we might just ignore it or restart context?
-                            // A simple way to simulate "stop" is to suspend/resume context, or just let it play out (latency might be issue).
-                            // Advanced: Use an AudioWorklet or a ring buffer that we can clear.
-                        } else {
-                            log(`Unknown event type: ${data.event}`);
+                            log('Clearing audio queue');
+                            stopAllAudio();
+                            currentAiText = '';
+                            updateCurrentSpeech('🎧 お話しください...', '');
+                            updateStatus('聞いています...', 'listening');
                         }
                     } catch (e) {
-                        log(`Error processing WebSocket message: ${e.message}`);
+                        log(`Error: ${e.message}`);
                     }
                 };
 
                 websocket.onclose = () => {
-                    updateStatus("Disconnected");
+                    log('WebSocket closed');
+                    updateStatus('切断されました', '');
                     resetUI();
                 };
 
-                websocket.onerror = (error) => {
-                    log(`WebSocket Error: ${error}`);
+                websocket.onerror = (e) => {
+                    log(`WebSocket error`);
                 };
 
             } catch (e) {
                 log(`Error: ${e.message}`);
                 startBtn.disabled = false;
+                startBtn.classList.remove('loading');
+                startBtnText.textContent = '🎤 通話開始';
+                updateStatus('エラーが発生しました', '');
             }
         };
 
@@ -199,137 +758,156 @@
         function closeConnection() {
             if (websocket) websocket.close();
             if (audioContext) audioContext.close();
-            if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+            audioContext = null;
+            if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
             resetUI();
         }
 
         function resetUI() {
             startBtn.disabled = false;
-            startBtn.style.display = 'inline-block';
+            startBtn.classList.remove('loading');
+            startBtn.style.display = 'inline-flex';
+            startBtnText.textContent = '🎤 通話開始';
             stopBtn.style.display = 'none';
-            updateStatus("Ready to connect");
+            updateStatus('待機中', '');
+            updateCurrentSpeech('🔇 待機中', '');
+            audioLevelBar.style.width = '0%';
+            nextStartTime = 0;
         }
 
         function startRecording() {
             inputSource = audioContext.createMediaStreamSource(mediaStream);
-            
-            // Use ScriptProcessor (deprecated but works for simple demo) or AudioWorklet
-            const bufferSize = 2048; 
+            const bufferSize = 2048;
             processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
 
-            let chunkCount = 0;
-            let firstChunk = true;
             processor.onaudioprocess = (e) => {
                 if (websocket && websocket.readyState === WebSocket.OPEN) {
                     const inputData = e.inputBuffer.getChannelData(0);
-                    
-                    // Check if there's actual audio (not silence)
-                    let hasAudio = false;
+
+                    // Audio level visualization
+                    let sum = 0;
                     for (let i = 0; i < inputData.length; i++) {
-                        if (Math.abs(inputData[i]) > 0.01) {
-                            hasAudio = true;
-                            break;
-                        }
+                        sum += Math.abs(inputData[i]);
                     }
-                    
-                    if (firstChunk) {
-                        log(`First audio chunk received. Has audio: ${hasAudio}, Length: ${inputData.length}`);
-                        firstChunk = false;
-                    }
-                    
-                    // Convert Float32 [-1, 1] to Int16 PCM
+                    const level = Math.min((sum / inputData.length) * 350, 100);
+                    audioLevelBar.style.width = level + '%';
+
+                    // Convert to PCM16
                     const pcmData = new Int16Array(inputData.length);
                     for (let i = 0; i < inputData.length; i++) {
-                        let s = Math.max(-1, Math.min(1, inputData[i]));
+                        const s = Math.max(-1, Math.min(1, inputData[i]));
                         pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                     }
-                    
-                    // Convert Int16Array to Uint8Array (bytes)
-                    const uint8Array = new Uint8Array(pcmData.buffer);
-                    
-                    // Convert to Base64 directly (more efficient than FileReader)
+
+                    // Send as base64
+                    const uint8 = new Uint8Array(pcmData.buffer);
                     let binary = '';
-                    for (let i = 0; i < uint8Array.length; i++) {
-                        binary += String.fromCharCode(uint8Array[i]);
+                    for (let i = 0; i < uint8.length; i++) {
+                        binary += String.fromCharCode(uint8[i]);
                     }
-                    const base64data = btoa(binary);
-                    
-                    // Send to server
-                    try {
-                        websocket.send(JSON.stringify({
-                            event: 'media',
-                            media: {
-                                payload: base64data
-                            }
-                        }));
-                        chunkCount++;
-                        if (chunkCount === 1 || chunkCount % 100 === 0) {
-                            log(`Sent ${chunkCount} audio chunks (${base64data.length} bytes)`);
-                        }
-                    } catch (err) {
-                        log(`Error sending audio: ${err.message}`);
-                    }
+
+                    websocket.send(JSON.stringify({
+                        event: 'media',
+                        media: { payload: btoa(binary) }
+                    }));
                 }
             };
 
             inputSource.connect(processor);
             processor.connect(audioContext.destination);
+            log('Recording started');
+        }
+
+        // Audio queue management
+        let activeSources = [];
+
+        function stopAllAudio() {
+            // Stop all currently playing audio sources
+            activeSources.forEach(source => {
+                try {
+                    source.stop();
+                } catch (e) {
+                    // Already stopped
+                }
+            });
+            activeSources = [];
+            nextStartTime = 0;
+            log('All audio stopped');
         }
 
         function playAudio(base64Data) {
             try {
-                // Decode Base64 to ArrayBuffer
-                const binaryString = window.atob(base64Data);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
+                const binary = atob(base64Data);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
                 }
-                
-                log(`Received audio chunk: ${len} bytes (u-law)`);
 
-                // This is u-law data coming from server (as per our current main.py logic).
-                // We need to decode u-law to PCM Float32 for Web Audio API.
                 const float32Data = ulawToFloat32(bytes);
-                
-                const audioBuffer = audioContext.createBuffer(1, float32Data.length, 8000);
-                audioBuffer.getChannelData(0).set(float32Data);
-                
+
+                // Resample 8000Hz to AudioContext rate
+                const srcRate = 8000;
+                const dstRate = audioContext.sampleRate;
+
+                let resampled;
+                if (srcRate !== dstRate) {
+                    const ratio = dstRate / srcRate;
+                    const newLen = Math.floor(float32Data.length * ratio);
+                    resampled = new Float32Array(newLen);
+                    for (let i = 0; i < newLen; i++) {
+                        const idx = i / ratio;
+                        const lo = Math.floor(idx);
+                        const hi = Math.min(lo + 1, float32Data.length - 1);
+                        const t = idx - lo;
+                        resampled[i] = float32Data[lo] * (1 - t) + float32Data[hi] * t;
+                    }
+                } else {
+                    resampled = float32Data;
+                }
+
+                const buffer = audioContext.createBuffer(1, resampled.length, dstRate);
+                buffer.getChannelData(0).set(resampled);
+
                 const source = audioContext.createBufferSource();
-                source.buffer = audioBuffer;
+                source.buffer = buffer;
                 source.connect(audioContext.destination);
-                
-                // Simple scheduling to play sequentially
-                const currentTime = audioContext.currentTime;
-                if (nextStartTime < currentTime) {
-                    nextStartTime = currentTime;
+
+                // Track active sources for interruption
+                activeSources.push(source);
+                source.onended = () => {
+                    const idx = activeSources.indexOf(source);
+                    if (idx > -1) activeSources.splice(idx, 1);
+                };
+
+                const now = audioContext.currentTime;
+                if (nextStartTime < now) {
+                    nextStartTime = now;
                 }
                 source.start(nextStartTime);
-                nextStartTime += audioBuffer.duration;
-                
-                log(`Scheduled audio at ${nextStartTime.toFixed(2)}s`);
+                nextStartTime += buffer.duration;
             } catch (e) {
-                log(`Error playing audio: ${e.message}`);
+                log(`Audio error: ${e.message}`);
             }
         }
 
-        // u-law decoder implementation
-        function ulawToFloat32(uLawBuffer) {
-            const decoded = new Float32Array(uLawBuffer.length);
-            for (let i = 0; i < uLawBuffer.length; i++) {
-                const ulaw = uLawBuffer[i];
-                ulaw = ~ulaw; // Invert
-                const sign = (ulaw & 0x80);
-                const exponent = (ulaw >> 4) & 0x07;
-                const mantissa = ulaw & 0x0F;
-                let sample = (0x21 | (mantissa << 1)) << exponent;
-                sample = (sample - 0x21); // Bias
+        function ulawToFloat32(ulaw) {
+            const decoded = new Float32Array(ulaw.length);
+            for (let i = 0; i < ulaw.length; i++) {
+                let u = ~ulaw[i];
+                const sign = u & 0x80;
+                const exp = (u >> 4) & 0x07;
+                const mant = u & 0x0F;
+                let sample = (0x21 | (mant << 1)) << exp;
+                sample -= 0x21;
                 if (sign) sample = -sample;
                 decoded[i] = sample / 32768.0;
             }
             return decoded;
         }
+
+        // Start preloading on page load
+        preloadGreeting();
     </script>
 </body>
-</html>
 
+</html>

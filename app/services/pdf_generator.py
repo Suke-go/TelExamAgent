@@ -1,12 +1,52 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from typing import Dict
 from datetime import datetime
 from io import BytesIO
+import os
+
+# 日本語フォントを登録（Windows標準フォントを使用）
+def register_japanese_fonts():
+    """日本語フォントを登録"""
+    fonts_dir = "C:/Windows/Fonts"
+    
+    # 游ゴシックを優先、なければメイリオを使用
+    font_paths = [
+        ("YuGothic", os.path.join(fonts_dir, "YuGothR.ttc")),
+        ("YuGothicBold", os.path.join(fonts_dir, "YuGothB.ttc")),
+        ("Meiryo", os.path.join(fonts_dir, "meiryo.ttc")),
+        ("MeiryoBold", os.path.join(fonts_dir, "meiryob.ttc")),
+        ("MSGothic", os.path.join(fonts_dir, "msgothic.ttc")),
+    ]
+    
+    registered_fonts = {}
+    for font_name, font_path in font_paths:
+        if os.path.exists(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
+                registered_fonts[font_name] = True
+            except Exception as e:
+                print(f"Warning: Could not register font {font_name}: {e}")
+    
+    # 使用するフォントを決定
+    if "YuGothic" in registered_fonts:
+        return "YuGothic", "YuGothicBold" if "YuGothicBold" in registered_fonts else "YuGothic"
+    elif "Meiryo" in registered_fonts:
+        return "Meiryo", "MeiryoBold" if "MeiryoBold" in registered_fonts else "Meiryo"
+    elif "MSGothic" in registered_fonts:
+        return "MSGothic", "MSGothic"
+    else:
+        # フォントが見つからない場合はデフォルトを返す
+        return "Helvetica", "Helvetica-Bold"
+
+# フォントを登録
+FONT_NORMAL, FONT_BOLD = register_japanese_fonts()
 
 def generate_pdf(report: Dict) -> BytesIO:
     """レポートからPDFを生成"""
@@ -15,11 +55,12 @@ def generate_pdf(report: Dict) -> BytesIO:
                             rightMargin=30*mm, leftMargin=30*mm,
                             topMargin=30*mm, bottomMargin=30*mm)
     
-    # スタイルの定義
+    # スタイルの定義（日本語フォントを使用）
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
+        fontName=FONT_BOLD,
         fontSize=18,
         textColor=colors.HexColor('#1a5490'),
         spaceAfter=30,
@@ -29,6 +70,7 @@ def generate_pdf(report: Dict) -> BytesIO:
     heading_style = ParagraphStyle(
         'CustomHeading',
         parent=styles['Heading2'],
+        fontName=FONT_BOLD,
         fontSize=14,
         textColor=colors.HexColor('#2c7fb8'),
         spaceAfter=12,
@@ -38,6 +80,7 @@ def generate_pdf(report: Dict) -> BytesIO:
     normal_style = ParagraphStyle(
         'CustomNormal',
         parent=styles['Normal'],
+        fontName=FONT_NORMAL,
         fontSize=10,
         leading=14,
         alignment=TA_JUSTIFY
@@ -74,7 +117,8 @@ def generate_pdf(report: Dict) -> BytesIO:
         ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e8f4f8')),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (0, -1), FONT_BOLD),
+        ('FONTNAME', (1, 0), (1, -1), FONT_NORMAL),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
@@ -156,4 +200,3 @@ def generate_pdf(report: Dict) -> BytesIO:
     doc.build(story)
     buffer.seek(0)
     return buffer
-
