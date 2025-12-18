@@ -4,6 +4,9 @@ import json
 from typing import AsyncGenerator
 import re
 
+# 問診プランナー統合
+from .interview_planner import InterviewPlanner
+
 # 問診ステージ定義
 INTERVIEW_STAGES = {
     "greeting": {
@@ -27,29 +30,43 @@ INTERVIEW_STAGES = {
     },
     "diet": {
         "name": "食事状況",
-        "goal": "食事の状況を確認する",
+        "goal": "食事の回数、規則性、間食、塩分・糖分について自然に聞き取る",
         "next": "exercise",
         "questions": [
             "最近のお食事はどうですか？規則正しく食べられていますか？",
-            "甘いものとか、ついつい食べちゃうことはありますか？"
+            "1日何食くらい召し上がってますか？朝はちゃんと食べられてます？",
+            "ついつい間食をしちゃったり、甘いものが止まらないなんてことはありますか？",
+            "味付けはどうですか？塩分を控えめに、とか意識されていますか？",
+            "お菓子とかジュースとか、甘いもの召し上がる機会多いですか？"
         ]
     },
     "exercise": {
         "name": "運動状況",
-        "goal": "運動習慣を確認する",
+        "goal": "運動の回数、習慣性、具体的な内容を確認する",
+        "next": "work",
+        "questions": [
+            "お散歩とか、何か体を動かす習慣はありますか？",
+            "週に何回くらい、どんなことをされていますか？",
+            "無理のない範囲で、少し汗をかくくらい動けていますか？"
+        ]
+    },
+    "work": {
+        "name": "生活・お仕事",
+        "goal": "仕事の過労状況や日々のストレスについて聞き取る",
         "next": "medication",
         "questions": [
-            "お散歩とか、体を動かす機会はありますか？",
-            "外に出るのが億劫になったりしていませんか？"
+            "最近、お仕事や家事でお忙しくされていませんか？",
+            "何かストレスに感じることや、お疲れが溜まっていることはないですか？"
         ]
     },
     "medication": {
-        "name": "薬の確認",
-        "goal": "服薬状況を確認する",
+        "name": "薬・インスリンの確認",
+        "goal": "服薬やインスリンの定期的な使用状況を確認し、評価する",
         "next": "closing",
         "questions": [
-            "お薬は毎日飲めていますか？",
-            "飲み忘れとかはないですか？"
+            "お薬は毎日、決まった時間に飲めていますか？",
+            "インスリンをお使いなら、そちらも忘れずに打てていますか？",
+            "飲み忘れがあったり、最近お薬で困っていることはないですか？"
         ]
     },
     "closing": {
@@ -124,6 +141,9 @@ class LLMService:
         self.stage_completed = {stage: False for stage in INTERVIEW_STAGES}
         self.last_topic = None
         self.pending_utterance = ""
+        
+        # 問診プランナー統合
+        self.interview_planner = InterviewPlanner()
 
     def _build_system_prompt(self) -> str:
         """Build dynamic system prompt with current stage info."""
@@ -153,6 +173,16 @@ class LLMService:
         if remaining:
             stage_guidance += f"\n→ まだ: {', '.join(INTERVIEW_STAGES[s]['name'] for s in remaining[:2])}"
         
+        # 問診プランナーからの動的ガイダンスを追加
+        planner_guidance = self.interview_planner.get_guidance()
+        if planner_guidance:
+            stage_guidance += f"\n\n{planner_guidance}"
+        
+        # 文脈情報を追加
+        context_info = self.interview_planner.get_prompt_context()
+        if context_info:
+            stage_guidance += f"\n\n## 患者との会話の文脈\n{context_info}"
+        
         return SYSTEM_PROMPT + stage_guidance
 
     def _update_stage(self, user_text: str, assistant_response: str):
@@ -160,16 +190,19 @@ class LLMService:
         combined = (user_text + assistant_response).lower()
         
         # Track topics covered
-        if any(word in combined for word in ['体調', 'めまい', '喉', '渇き', 'だるい', '調子', '元気', '風邪']):
+        if any(word in combined for word in ['体調', 'めまい', '喉', '渇き', 'だるい', '調子', '元気', '風邪', '具合']):
             self.stage_completed["health_check"] = True
             self.last_topic = "体調"
-        if any(word in combined for word in ['食事', '食べ', '甘い', 'ご飯', '野菜']):
+        if any(word in combined for word in ['食事', '食べ', '甘い', 'ご飯', '野菜', '間食', '塩分', 'おやつ']):
             self.stage_completed["diet"] = True
             self.last_topic = "食事"
-        if any(word in combined for word in ['運動', '散歩', '歩', '外出', '動']):
+        if any(word in combined for word in ['運動', '散歩', '歩', '外出', '動', '習慣']):
             self.stage_completed["exercise"] = True
             self.last_topic = "運動"
-        if any(word in combined for word in ['薬', '服用', '飲み忘れ', '処方', '飲んで']):
+        if any(word in combined for word in ['仕事', '会社', '残業', '忙しい', 'ストレス', '疲れ']):
+            self.stage_completed["work"] = True
+            self.last_topic = "仕事"
+        if any(word in combined for word in ['薬', '服用', '飲み忘れ', '処方', '飲んで', 'インスリン', '注射']):
             self.stage_completed["medication"] = True
             self.last_topic = "薬"
         if any(word in combined for word in ['来院', '次回', '予約', '予定', '病院']):
@@ -203,6 +236,9 @@ class LLMService:
             self.pending_utterance = ""
         
         self.history.append({"role": "user", "content": text})
+        
+        # 問診プランナーで発話を分析（並列実行想定、レイテンシ増加なし）
+        self.interview_planner.analyze_utterance(text)
         
         # Build messages with dynamic system prompt
         messages = [
@@ -244,12 +280,14 @@ class LLMService:
             yield (error_msg, error_msg)
 
     def get_summary(self) -> dict:
-        """Get conversation progress."""
+        """Get conversation progress including interview planner data."""
         return {
             "current_stage": self.current_stage,
             "stage_completed": self.stage_completed,
             "history_length": len(self.history),
-            "last_topic": self.last_topic
+            "last_topic": self.last_topic,
+            # 問診プランナーからのデータを追加
+            "interview_analysis": self.interview_planner.get_report_data()
         }
 
     def reset(self):
@@ -259,4 +297,5 @@ class LLMService:
         self.stage_completed = {stage: False for stage in INTERVIEW_STAGES}
         self.last_topic = None
         self.pending_utterance = ""
-
+        # 問診プランナーもリセット
+        self.interview_planner.reset()

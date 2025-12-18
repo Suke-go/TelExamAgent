@@ -319,9 +319,11 @@ async def browser_websocket_endpoint(websocket: WebSocket):
         speculative_llm_task = asyncio.create_task(run_speculative_llm(initial_transcript))
         logger.info(f"Started speculative LLM for: {initial_transcript[:30]}...")
         
-        # Adaptive wait loop
+        # Adaptive wait loop with dual inference:
+        # 1. dB drop detection (fast path)
+        # 2. Silence duration (fallback)
         silence_start_time = None
-        required_silence_duration = 1.5  # Default, will be updated adaptively
+        required_silence_duration = 0.5  # Reduced from 1.5s since we have dB drop detection
         
         while True:
             elapsed = time.time() - start_time
@@ -335,9 +337,16 @@ async def browser_websocket_endpoint(websocket: WebSocket):
             current_db = vad_service._current_db
             is_silent = current_db < -40
             
-            # Update required silence duration based on dB (adaptive)
-            required_silence_duration = get_adaptive_wait_time(current_db)
+            # Update dB history for drop detection
+            vad_service.update_db_history(current_db)
             
+            # FAST PATH: Check for significant dB drop
+            if vad_service.detect_db_drop():
+                drop_info = vad_service.get_db_drop_info()
+                logger.info(f"dB drop detected! peak={drop_info['recent_peak']:.1f}dB -> current={drop_info['current_db']:.1f}dB (relative drop={drop_info['relative_drop']:.0%})")
+                break
+            
+            # FALLBACK: Traditional silence duration check
             if is_silent:
                 if silence_start_time is None:
                     silence_start_time = time.time()
@@ -346,7 +355,7 @@ async def browser_websocket_endpoint(websocket: WebSocket):
                 
                 # Check if we've had enough silence
                 if silence_duration >= required_silence_duration:
-                    logger.info(f"Adaptive timing: {silence_duration:.2f}s silence at {current_db:.1f}dB (required: {required_silence_duration:.2f}s)")
+                    logger.info(f"Silence detected: {silence_duration:.2f}s at {current_db:.1f}dB")
                     break
             else:
                 # Reset silence timer - user is still speaking

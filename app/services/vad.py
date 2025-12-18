@@ -31,6 +31,11 @@ class VADService:
         self._last_speech_time = 0.0
         self._current_db = -100.0
         
+        # dB level history for drop detection
+        self._db_history = []
+        self._db_history_max_len = 10  # Track last 10 samples
+        self._db_drop_threshold = 15  # dB drop threshold for speech end detection
+        
         print("Silero VAD model loaded successfully.")
 
     def reset(self):
@@ -40,6 +45,7 @@ class VADService:
         self._silence_chunk_count = 0
         self._last_speech_time = 0.0
         self._current_db = -100.0
+        self._db_history = []
 
     @staticmethod
     def calculate_db_level(audio_float32: np.ndarray) -> float:
@@ -145,6 +151,59 @@ class VADService:
             return False
         
         return True
+    
+    def update_db_history(self, db_level: float):
+        """Update the dB level history for drop detection."""
+        self._db_history.append(db_level)
+        if len(self._db_history) > self._db_history_max_len:
+            self._db_history.pop(0)
+    
+    def detect_db_drop(self) -> bool:
+        """
+        Detect a significant drop in dB level indicating speech end.
+        Uses RELATIVE threshold: drop must be significant relative to speaking level.
+        """
+        if len(self._db_history) < 3:
+            return False
+        
+        # Get the peak from recent history (excluding last 2 samples)
+        recent_peak = max(self._db_history[:-2]) if len(self._db_history) > 2 else self._db_history[0]
+        current_db = self._current_db
+        
+        # Only consider if we had audible speech (peak above silence threshold)
+        if recent_peak < self.SILENCE_DB_THRESHOLD:
+            return False
+        
+        # Calculate relative drop
+        # dB is logarithmic, so we use the ratio of the drop to the "speaking range"
+        # Speaking range = peak - silence threshold (e.g. -20dB - (-40dB) = 20dB)
+        speaking_range = recent_peak - self.SILENCE_DB_THRESHOLD
+        if speaking_range <= 0:
+            return False
+        
+        db_drop = recent_peak - current_db
+        relative_drop = db_drop / speaking_range
+        
+        # Trigger if dropped by 40% of speaking range AND now below silence threshold
+        if relative_drop >= 0.4 and current_db < self.SILENCE_DB_THRESHOLD:
+            return True
+        
+        return False
+    
+    def get_db_drop_info(self) -> dict:
+        """Get dB drop detection info for debugging."""
+        recent_peak = max(self._db_history) if self._db_history else -100.0
+        speaking_range = recent_peak - self.SILENCE_DB_THRESHOLD
+        db_drop = recent_peak - self._current_db if self._db_history else 0
+        relative_drop = db_drop / speaking_range if speaking_range > 0 else 0
+        return {
+            "current_db": self._current_db,
+            "recent_peak": recent_peak,
+            "drop": db_drop,
+            "relative_drop": relative_drop,
+            "speaking_range": speaking_range,
+            "history_len": len(self._db_history)
+        }
     
     def get_current_state(self) -> dict:
         """Get current VAD state for debugging/monitoring."""
